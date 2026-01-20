@@ -191,5 +191,64 @@ defmodule Smelter.ResolverTest do
       item = resolved["properties"]["item"]
       assert item[:_ref_module] =~ "Custom.Prefix"
     end
+
+    test "inlines local refs to simple types (not generatable)" do
+      path = Path.join(@fixtures_path, "simple_type_ref_schema.json")
+      {:ok, schema} = File.read!(path) |> JSON.decode!() |> then(&{:ok, &1})
+      assert {:ok, resolved} = Resolver.resolve(schema, path)
+
+      # version should be inlined as string type, no _ref_module
+      version = resolved["properties"]["version"]
+      assert version["type"] == "string"
+      assert version["pattern"] == "^\\d{4}-\\d{2}-\\d{2}$"
+      assert version[:_ref] == "#/$defs/version"
+      refute Map.has_key?(version, :_ref_module)
+
+      # contact should be inlined as string with format
+      contact = resolved["properties"]["contact"]
+      assert contact["type"] == "string"
+      assert contact["format"] == "email"
+      refute Map.has_key?(contact, :_ref_module)
+    end
+
+    test "inlines file refs to simple types (not generatable)" do
+      path = Path.join(@fixtures_path, "ref_to_simple_type.json")
+      {:ok, schema} = File.read!(path) |> JSON.decode!() |> then(&{:ok, &1})
+      assert {:ok, resolved} = Resolver.resolve(schema, path)
+
+      # country_code refs a simple string type - should be inlined
+      country_code = resolved["properties"]["country_code"]
+      assert country_code["type"] == "string"
+      assert country_code["pattern"] == "^[A-Z]{2,3}$"
+      assert country_code[:_ref] == "simple_type.json"
+      refute Map.has_key?(country_code, :_ref_module)
+    end
+
+    test "uses root_schema option for resolving local refs in $def entries" do
+      path = Path.join(@fixtures_path, "defs_with_local_refs.json")
+      {:ok, root_schema} = File.read!(path) |> JSON.decode!() |> then(&{:ok, &1})
+
+      # Extract the profile $def and resolve it with root_schema context
+      profile_def = root_schema["$defs"]["profile"]
+      assert {:ok, resolved} = Resolver.resolve(profile_def, path, root_schema: root_schema)
+
+      # version should be resolved from root schema's $defs
+      version = resolved["properties"]["version"]
+      assert version["type"] == "string"
+      assert version["pattern"] == "^\\d{4}-\\d{2}-\\d{2}$"
+      assert version[:_ref] == "#/$defs/version"
+      refute Map.has_key?(version, :_ref_module)
+    end
+
+    test "fails to resolve local refs in $def without root_schema" do
+      path = Path.join(@fixtures_path, "defs_with_local_refs.json")
+      {:ok, root_schema} = File.read!(path) |> JSON.decode!() |> then(&{:ok, &1})
+
+      # Extract the profile $def and try to resolve without root_schema
+      profile_def = root_schema["$defs"]["profile"]
+
+      # Should fail because #/$defs/version doesn't exist in profile_def
+      assert {:error, {:ref_not_found, "#/$defs/version"}} = Resolver.resolve(profile_def, path)
+    end
   end
 end

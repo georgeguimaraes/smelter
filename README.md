@@ -1,4 +1,4 @@
-# Smelter
+# Smelter 🔥⚗️
 
 JSON Schema to Elixir code generator. Extracts pure Elixir types from raw JSON Schema ore.
 

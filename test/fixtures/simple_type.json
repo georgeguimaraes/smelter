@@ -1,0 +1,8 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/simple_type.json",
+  "title": "Simple Type",
+  "description": "A simple string type, not a generatable schema.",
+  "type": "string",
+  "pattern": "^[A-Z]{2,3}$"
+}

@@ -118,6 +118,15 @@ defmodule Smelter.TypeMapperTest do
       assert opts[:cardinality] == :many
     end
 
+    test "maps array with union ref items to array of map" do
+      property = %{
+        "type" => "array",
+        "items" => %{:_ref_module => "Test.UnionModule", :_ref_type => :union}
+      }
+
+      assert {{:array, :map}, _opts} = TypeMapper.map_type(property)
+    end
+
     test "maps union ref type to :union_ref" do
       property = %{:_ref_module => "Test.UnionModule", :_ref_type => :union}
       assert {type, opts} = TypeMapper.map_type(property)

@@ -144,7 +144,16 @@ defmodule Smelter.TypeMapper do
 
       Map.has_key?(items, :_ref_module) ->
         module = items[:_ref_module]
-        {:ref, [module: module, cardinality: :many]}
+        ref_type = items[:_ref_type] || :regular
+
+        case ref_type do
+          :union ->
+            # Union types don't have fields() - use {:array, :map}
+            {{:array, :map}, []}
+
+          :regular ->
+            {:ref, [module: module, cardinality: :many]}
+        end
 
       items["type"] ->
         {inner_type, inner_opts} = map_type(items)

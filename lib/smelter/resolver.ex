@@ -15,10 +15,20 @@ defmodule Smelter.Resolver do
   @doc """
   Resolves all $ref in a schema, returning a fully resolved schema
   with metadata about the original references.
+
+  ## Options
+
+  - `:schemas_dir` - Directory containing schema files for resolving file refs
+  - `:module_prefix` - Prefix for generated module names (default: "Smelter.Generated")
+  - `:root_schema` - Root schema for resolving local refs (default: the schema being resolved).
+    Use this when resolving a $def entry that needs access to sibling $defs.
   """
   @spec resolve(schema(), Path.t(), opts()) :: {:ok, schema()} | {:error, term()}
   def resolve(schema, schema_path, opts \\ []) do
     expanded_path = Path.expand(schema_path)
+
+    # Allow passing a root_schema for resolving local refs in $def entries
+    root_schema = opts[:root_schema] || schema
 
     context = %{
       schema_path: expanded_path,
@@ -26,7 +36,7 @@ defmodule Smelter.Resolver do
       original_schema_path: expanded_path,
       schemas_dir: opts[:schemas_dir] || find_schemas_dir(schema_path),
       module_prefix: opts[:module_prefix] || "Smelter.Generated",
-      root_schema: schema
+      root_schema: root_schema
     }
 
     case resolve_schema(schema, context) do
@@ -44,12 +54,22 @@ defmodule Smelter.Resolver do
         # Local refs within the same file - resolve fully
         case resolve_ref(ref, context) do
           {:ok, resolved, new_context} ->
+            # Only add _ref_module if the resolved schema is generatable (has properties or composition)
+            # Simple types like {"type": "string"} should be inlined without a module reference
             merged =
               schema
               |> Map.delete("$ref")
               |> Map.merge(resolved, fn _k, v1, _v2 -> v1 end)
               |> Map.put(:_ref, ref)
-              |> Map.put(:_ref_module, ref_to_module(ref, context))
+
+            merged =
+              if generatable_schema?(resolved) do
+                merged
+                |> Map.put(:_ref_module, ref_to_module(ref, context))
+                |> Map.put(:_ref_type, determine_schema_ref_type(resolved))
+              else
+                merged
+              end
 
             {:ok, merged, new_context}
 
@@ -58,18 +78,51 @@ defmodule Smelter.Resolver do
         end
 
       {:file, file_path, pointer} ->
-        # File refs - annotate with module info and check if target is a union type
-        # Don't recursively resolve to avoid path confusion
+        # File refs - check if target is generatable before adding module ref
         full_path = Path.expand(file_path, Path.dirname(context.schema_path))
-        ref_type = determine_ref_type(full_path, pointer)
 
-        annotated =
-          schema
-          |> Map.put(:_ref, ref)
-          |> Map.put(:_ref_module, ref_to_module(ref, context))
-          |> Map.put(:_ref_type, ref_type)
+        # Load target schema to check if it's generatable
+        case load_and_get_target(full_path, pointer) do
+          {:ok, target_schema} ->
+            if generatable_schema?(target_schema) do
+              ref_type = determine_ref_type_from_schema(target_schema)
 
-        {:ok, annotated, context}
+              annotated =
+                schema
+                |> Map.put(:_ref, ref)
+                |> Map.put(:_ref_module, ref_to_module(ref, context))
+                |> Map.put(:_ref_type, ref_type)
+
+              {:ok, annotated, context}
+            else
+              # Target is a simple type - resolve it inline
+              case resolve_ref(ref, context) do
+                {:ok, resolved, new_context} ->
+                  merged =
+                    schema
+                    |> Map.delete("$ref")
+                    |> Map.merge(resolved, fn _k, v1, _v2 -> v1 end)
+                    |> Map.put(:_ref, ref)
+
+                  {:ok, merged, new_context}
+
+                error ->
+                  error
+              end
+            end
+
+          {:error, _} ->
+            # Fallback to just annotating with module
+            ref_type = determine_ref_type(full_path, pointer)
+
+            annotated =
+              schema
+              |> Map.put(:_ref, ref)
+              |> Map.put(:_ref_module, ref_to_module(ref, context))
+              |> Map.put(:_ref_type, ref_type)
+
+            {:ok, annotated, context}
+        end
     end
   end
 
@@ -284,8 +337,8 @@ defmodule Smelter.Resolver do
     end
   end
 
-  # Determine the type of schema a ref points to (union or regular)
-  defp determine_ref_type(file_path, pointer) do
+  # Load schema file and extract target at pointer
+  defp load_and_get_target(file_path, pointer) do
     case load_schema(file_path) do
       {:ok, schema} ->
         target =
@@ -296,14 +349,33 @@ defmodule Smelter.Resolver do
             schema
           end
 
-        if is_map(target) and (Map.has_key?(target, "oneOf") or Map.has_key?(target, "anyOf")) do
-          :union
+        if target do
+          {:ok, target}
         else
-          :regular
+          {:error, :not_found}
         end
 
-      {:error, _} ->
-        :regular
+      error ->
+        error
+    end
+  end
+
+  # Determine ref type from already-loaded schema
+  defp determine_ref_type_from_schema(schema) when is_map(schema) do
+    if Map.has_key?(schema, "oneOf") or Map.has_key?(schema, "anyOf") do
+      :union
+    else
+      :regular
+    end
+  end
+
+  defp determine_ref_type_from_schema(_), do: :regular
+
+  # Determine the type of schema a ref points to (union or regular)
+  defp determine_ref_type(file_path, pointer) do
+    case load_and_get_target(file_path, pointer) do
+      {:ok, target} -> determine_ref_type_from_schema(target)
+      {:error, _} -> :regular
     end
   end
 
@@ -412,4 +484,26 @@ defmodule Smelter.Resolver do
       nil -> Path.dirname(schema_path)
     end
   end
+
+  # Check if a schema is generatable (has properties or composition types)
+  # Simple types like {"type": "string"} are not generatable and should be inlined
+  defp generatable_schema?(schema) when is_map(schema) do
+    Map.has_key?(schema, "properties") or
+      Map.has_key?(schema, "oneOf") or
+      Map.has_key?(schema, "anyOf") or
+      Map.has_key?(schema, "allOf")
+  end
+
+  defp generatable_schema?(_), do: false
+
+  # Determine if a resolved schema is a union type
+  defp determine_schema_ref_type(schema) when is_map(schema) do
+    if Map.has_key?(schema, "oneOf") or Map.has_key?(schema, "anyOf") do
+      :union
+    else
+      :regular
+    end
+  end
+
+  defp determine_schema_ref_type(_), do: :regular
 end

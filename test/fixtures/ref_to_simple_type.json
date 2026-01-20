@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/ref_to_simple_type.json",
+  "title": "Ref To Simple Type",
+  "description": "References a simple type file (not generatable).",
+  "type": "object",
+  "properties": {
+    "country_code": {
+      "$ref": "simple_type.json",
+      "description": "ISO country code."
+    },
+    "name": {
+      "type": "string"
+    }
+  }
+}
