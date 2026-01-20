@@ -2,14 +2,17 @@
 
 JSON Schema to Elixir code generator. Extracts pure Elixir types from raw JSON Schema ore.
 
+Generates [Schemecto](https://github.com/josevalim/schemecto)-compatible modules that provide `new/1` for validation and `fields/0` for introspection.
+
 ## Features
 
 - Full `$ref` resolution (local, cross-file, JSON pointers)
 - Schema composition (`oneOf`, `anyOf`, `allOf`)
+- `$defs` extraction and module generation
 - Enum and const handling
 - Format specifiers (date-time, uri, email, uuid)
 - Nested object and array handling
-- Generates [Schemecto](https://github.com/josevalim/schemecto)-compatible modules
+- Batch generation from schema directories
 
 ## Installation
 
@@ -25,6 +28,8 @@ end
 
 ## Usage
 
+### Single Schema
+
 ```elixir
 # Parse and resolve a schema
 {:ok, schema} = Smelter.parse("path/to/schema.json")
@@ -36,7 +41,24 @@ code = Smelter.generate(schema, module: "MyApp.Schemas.User")
 {:ok, code} = Smelter.compile("path/to/schema.json", module: "MyApp.Schemas.User")
 ```
 
-### Generated Code
+### Batch Generation
+
+Smelter can process entire directories of JSON Schemas, preserving the folder structure:
+
+```elixir
+Smelter.Batch.generate(
+  schema_dir: "priv/schemas/2026-01-11",
+  output_dir: "lib/my_app/schemas",
+  module_prefix: "MyApp.Schemas"
+)
+```
+
+This processes all `.json` files in the directory, including:
+- Root schemas with `properties`
+- Union schemas (`oneOf`/`anyOf`)
+- `$defs` entries within schemas
+
+## Generated Code
 
 Given a JSON Schema like:
 
@@ -98,7 +120,7 @@ Properties from all schemas are merged together:
 
 ### oneOf / anyOf
 
-Generates union type modules with variant detection:
+Generates union type modules that delegate to the appropriate variant:
 
 ```json
 {
@@ -108,6 +130,35 @@ Generates union type modules with variant detection:
   ]
 }
 ```
+
+Generated code uses a discriminator field (commonly `type`) to route to the correct schema module.
+
+### $defs
+
+Entries in `$defs` are extracted and generated as separate modules. A schema like:
+
+```json
+{
+  "$defs": {
+    "Address": {
+      "type": "object",
+      "properties": { "city": { "type": "string" } }
+    }
+  }
+}
+```
+
+Generates `MyApp.Schemas.ContainerName.Address` module.
+
+## Real-World Usage: Bazaar
+
+[Bazaar](../bazaar) uses Smelter to generate UCP schemas:
+
+```bash
+mix bazaar.gen.schemas priv/ucp_schemas/2026-01-11
+```
+
+This generates all Elixir modules in `lib/bazaar/schemas/` from the official UCP JSON Schemas.
 
 ## License
 
