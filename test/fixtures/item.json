@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/item.json",
+  "title": "Item",
+  "description": "A simple item schema.",
+  "type": "object",
+  "required": ["id", "name"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "The item's unique identifier."
+    },
+    "name": {
+      "type": "string",
+      "description": "The item's name."
+    },
+    "quantity": {
+      "type": "integer",
+      "default": 1
+    }
+  }
+}

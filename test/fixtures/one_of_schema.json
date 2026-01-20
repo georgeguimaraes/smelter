@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/one_of.json",
+  "title": "Message Union",
+  "description": "A union type representing different message types.",
+  "oneOf": [
+    {
+      "$ref": "one_of_message_error.json"
+    },
+    {
+      "$ref": "one_of_message_warning.json"
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/message_warning.json",
+  "title": "Message Warning",
+  "description": "A warning message variant.",
+  "type": "object",
+  "required": ["type", "message"],
+  "properties": {
+    "type": {
+      "type": "string",
+      "const": "warning"
+    },
+    "message": {
+      "type": "string"
+    },
+    "severity": {
+      "type": "string",
+      "enum": ["low", "medium", "high"]
+    }
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/enum.json",
+  "title": "Enum Schema",
+  "description": "A schema with enum types.",
+  "type": "object",
+  "required": ["status"],
+  "properties": {
+    "status": {
+      "type": "string",
+      "enum": ["pending", "active", "completed"],
+      "description": "The current status."
+    },
+    "priority": {
+      "type": "string",
+      "enum": ["low", "medium", "high"]
+    },
+    "type": {
+      "type": "string",
+      "const": "task",
+      "description": "The item type (always 'task')."
+    }
+  }
+}

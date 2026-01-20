@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/ref.json",
+  "title": "Ref Schema",
+  "description": "A schema with local and file references.",
+  "type": "object",
+  "required": ["item"],
+  "$defs": {
+    "money": {
+      "title": "Money",
+      "type": "object",
+      "properties": {
+        "amount": {
+          "type": "integer"
+        },
+        "currency": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  "properties": {
+    "item": {
+      "$ref": "item.json",
+      "description": "The associated item."
+    },
+    "price": {
+      "$ref": "#/$defs/money",
+      "description": "The item's price."
+    },
+    "discount": {
+      "$ref": "#/$defs/money",
+      "description": "The discount amount."
+    }
+  }
+}

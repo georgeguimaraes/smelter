@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/nullable.json",
+  "title": "Nullable Schema",
+  "description": "A schema with nullable types.",
+  "type": "object",
+  "properties": {
+    "optional_name": {
+      "type": ["string", "null"],
+      "description": "An optional nullable string."
+    },
+    "optional_count": {
+      "type": ["integer", "null"],
+      "description": "An optional nullable integer."
+    }
+  }
+}

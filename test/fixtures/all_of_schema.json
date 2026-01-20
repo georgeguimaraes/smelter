@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/all_of.json",
+  "title": "Extended Schema",
+  "description": "A schema that extends a base schema using allOf.",
+  "allOf": [
+    {
+      "$ref": "all_of_base.json"
+    },
+    {
+      "type": "object",
+      "required": ["name"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "The entity's name."
+        },
+        "description": {
+          "type": "string",
+          "description": "Optional description."
+        }
+      }
+    }
+  ]
+}

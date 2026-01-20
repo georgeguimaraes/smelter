@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/formats.json",
+  "title": "Formats Schema",
+  "description": "A schema with various string formats.",
+  "type": "object",
+  "properties": {
+    "email": {
+      "type": "string",
+      "format": "email",
+      "description": "An email address."
+    },
+    "website": {
+      "type": "string",
+      "format": "uri",
+      "description": "A website URL."
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "A timestamp."
+    },
+    "birthday": {
+      "type": "string",
+      "format": "date",
+      "description": "A date."
+    },
+    "uuid": {
+      "type": "string",
+      "format": "uuid",
+      "description": "A UUID."
+    }
+  }
+}
