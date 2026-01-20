@@ -152,7 +152,7 @@ Generates `MyApp.Schemas.ContainerName.Address` module.
 
 ## Real-World Usage: Bazaar
 
-[Bazaar](../bazaar) uses Smelter to generate UCP schemas:
+[Bazaar](https://github.com/georgeguimaraes/bazaar) uses Smelter to generate UCP schemas:
 
 ```bash
 mix bazaar.gen.schemas priv/ucp_schemas/2026-01-11
