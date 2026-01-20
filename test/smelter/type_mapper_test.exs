@@ -118,6 +118,13 @@ defmodule Smelter.TypeMapperTest do
       assert opts[:cardinality] == :many
     end
 
+    test "maps union ref type to :union_ref" do
+      property = %{:_ref_module => "Test.UnionModule", :_ref_type => :union}
+      assert {type, opts} = TypeMapper.map_type(property)
+      assert type == :union_ref
+      assert opts[:module] == "Test.UnionModule"
+    end
+
     test "extracts constraints from property" do
       assert {_type, opts} =
                TypeMapper.map_type(%{
@@ -147,6 +154,127 @@ defmodule Smelter.TypeMapperTest do
     test "extracts default value" do
       assert {_type, opts} = TypeMapper.map_type(%{"type" => "boolean", "default" => true})
       assert opts[:default] == true
+    end
+
+    test "maps oneOf composition to union type" do
+      property = %{
+        :_composition =>
+          {:one_of, [%{:_ref_module => "Test.VariantA"}, %{:_ref_module => "Test.VariantB"}]}
+      }
+
+      assert {type, opts} = TypeMapper.map_type(property)
+      assert type == :union
+      assert opts[:strategy] == :one_of
+      assert length(opts[:variants]) == 2
+    end
+
+    test "maps anyOf composition to union type" do
+      property = %{
+        :_composition =>
+          {:any_of, [%{:_ref_module => "Test.VariantA"}, %{:_ref_module => "Test.VariantB"}]}
+      }
+
+      assert {type, opts} = TypeMapper.map_type(property)
+      assert type == :union
+      assert opts[:strategy] == :any_of
+    end
+
+    test "maps allOf composition with properties to embedded" do
+      property = %{
+        :_composition => {:all_of, []},
+        "properties" => %{"name" => %{"type" => "string"}}
+      }
+
+      assert {type, opts} = TypeMapper.map_type(property)
+      assert type == :embedded
+      assert is_list(opts[:fields])
+    end
+
+    test "maps allOf composition without properties to map" do
+      property = %{:_composition => {:all_of, []}}
+      assert {type, _opts} = TypeMapper.map_type(property)
+      assert type == :map
+    end
+
+    test "maps nested object with properties to embedded" do
+      property = %{
+        "type" => "object",
+        "properties" => %{
+          "name" => %{"type" => "string"},
+          "age" => %{"type" => "integer"}
+        },
+        "required" => ["name"]
+      }
+
+      assert {type, opts} = TypeMapper.map_type(property)
+      assert type == :embedded
+      fields = opts[:fields]
+      assert length(fields) == 2
+
+      name_field = Enum.find(fields, &(&1.name == "name"))
+      assert name_field.type == :string
+      assert name_field.required == true
+
+      age_field = Enum.find(fields, &(&1.name == "age"))
+      assert age_field.type == :integer
+      assert age_field.required == false
+    end
+
+    test "maps object with additionalProperties ref" do
+      property = %{
+        "type" => "object",
+        "additionalProperties" => %{:_ref_module => "Test.Value"}
+      }
+
+      assert {type, opts} = TypeMapper.map_type(property)
+      assert type == :map
+      assert opts[:value_type] == {:ref, "Test.Value"}
+    end
+
+    test "maps object with additionalProperties type" do
+      property = %{
+        "type" => "object",
+        "additionalProperties" => %{"type" => "string"}
+      }
+
+      assert {type, opts} = TypeMapper.map_type(property)
+      assert type == :map
+      assert opts[:value_type] == :string
+    end
+
+    test "maps array without items to array of map" do
+      property = %{"type" => "array"}
+      assert {{:array, :map}, _opts} = TypeMapper.map_type(property)
+    end
+
+    test "maps string with format time" do
+      assert {type, _opts} = TypeMapper.map_type(%{"type" => "string", "format" => "time"})
+      assert type == :time
+    end
+
+    test "maps string with format ipv4" do
+      assert {type, opts} = TypeMapper.map_type(%{"type" => "string", "format" => "ipv4"})
+      assert type == :string
+      assert opts[:format] == :ipv4
+    end
+
+    test "maps nullable with multiple non-null types to map" do
+      property = %{"type" => ["string", "integer", "null"]}
+      assert {type, opts} = TypeMapper.map_type(property)
+      assert type == :map
+      assert opts[:nullable] == true
+    end
+
+    test "extracts exclusive min/max constraints" do
+      assert {_type, opts} =
+               TypeMapper.map_type(%{
+                 "type" => "integer",
+                 "exclusiveMinimum" => 0,
+                 "exclusiveMaximum" => 100
+               })
+
+      assert opts[:exclusive_minimum] == 0
+      assert opts[:exclusive_maximum] == 100
     end
   end
 
@@ -188,6 +316,45 @@ defmodule Smelter.TypeMapperTest do
       assert result =~ "Schemecto.many"
       assert result =~ "Test.Schema"
     end
+
+    test "converts union_ref type to :map" do
+      assert TypeMapper.to_ecto_type({:union_ref, [module: "Test.Union"]}) == ":map"
+    end
+
+    test "converts binary_id type" do
+      assert TypeMapper.to_ecto_type({:binary_id, []}) == ":binary_id"
+    end
+
+    test "converts time type" do
+      assert TypeMapper.to_ecto_type({:time, []}) == ":time"
+    end
+
+    test "converts const type" do
+      result = TypeMapper.to_ecto_type({:const, [value: "fixed"]})
+      assert result =~ "Ecto.ParameterizedType.init(Ecto.Enum"
+      assert result =~ ":fixed"
+    end
+
+    test "converts union type to :map" do
+      assert TypeMapper.to_ecto_type({:union, [variants: []]}) == ":map"
+    end
+
+    test "converts embedded type to :map" do
+      assert TypeMapper.to_ecto_type({:embedded, [fields: []]}) == ":map"
+    end
+
+    test "converts array_of with utc_datetime" do
+      assert TypeMapper.to_ecto_type({:array_of, [inner_type: :utc_datetime]}) ==
+               "{:array, :utc_datetime}"
+    end
+
+    test "converts array_of with complex type to array of map" do
+      assert TypeMapper.to_ecto_type({:array_of, [inner_type: :embedded]}) == "{:array, :map}"
+    end
+
+    test "converts unknown types to :map" do
+      assert TypeMapper.to_ecto_type({:unknown_type, []}) == ":map"
+    end
   end
 
   describe "to_type_ast/1" do
@@ -208,6 +375,53 @@ defmodule Smelter.TypeMapperTest do
       code = Macro.to_string(ast)
       assert code =~ "Schemecto.one"
       assert code =~ "Test.Schema"
+    end
+
+    test "returns :map for union_ref types" do
+      assert TypeMapper.to_type_ast({:union_ref, [module: "Test.Union"]}) == :map
+    end
+
+    test "returns datetime atoms" do
+      assert TypeMapper.to_type_ast({:utc_datetime, []}) == :utc_datetime
+      assert TypeMapper.to_type_ast({:date, []}) == :date
+      assert TypeMapper.to_type_ast({:time, []}) == :time
+      assert TypeMapper.to_type_ast({:binary_id, []}) == :binary_id
+    end
+
+    test "returns :map for union types" do
+      assert TypeMapper.to_type_ast({:union, [variants: []]}) == :map
+    end
+
+    test "returns :map for embedded types" do
+      assert TypeMapper.to_type_ast({:embedded, [fields: []]}) == :map
+    end
+
+    test "returns :map for enum types" do
+      assert TypeMapper.to_type_ast({:enum, [values: ["a", "b"]]}) == :map
+    end
+
+    test "returns :map for const types" do
+      assert TypeMapper.to_type_ast({:const, [value: "fixed"]}) == :map
+    end
+
+    test "returns AST for ref types with many cardinality" do
+      ast = TypeMapper.to_type_ast({:ref, [module: "Test.Schema", cardinality: :many]})
+      code = Macro.to_string(ast)
+      assert code =~ "Schemecto.many"
+      assert code =~ "Test.Schema"
+    end
+
+    test "returns :map for unknown types" do
+      assert TypeMapper.to_type_ast({:unknown, []}) == :map
+    end
+
+    test "returns array with utc_datetime" do
+      assert TypeMapper.to_type_ast({:array_of, [inner_type: :utc_datetime]}) ==
+               {:array, :utc_datetime}
+    end
+
+    test "returns array of map for complex inner types" do
+      assert TypeMapper.to_type_ast({:array_of, [inner_type: :embedded]}) == {:array, :map}
     end
   end
 end

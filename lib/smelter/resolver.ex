@@ -26,7 +26,6 @@ defmodule Smelter.Resolver do
       original_schema_path: expanded_path,
       schemas_dir: opts[:schemas_dir] || find_schemas_dir(schema_path),
       module_prefix: opts[:module_prefix] || "Smelter.Generated",
-      cache: %{},
       root_schema: schema
     }
 
@@ -251,44 +250,27 @@ defmodule Smelter.Resolver do
 
   # Resolve a reference to another file
   defp resolve_file_ref(file_path, pointer, context) do
-    full_path =
-      file_path
-      |> Path.expand(Path.dirname(context.schema_path))
+    full_path = Path.expand(file_path, Path.dirname(context.schema_path))
 
-    # Check cache first
-    cache_key = {full_path, pointer}
+    case load_schema(full_path) do
+      {:ok, schema} ->
+        target =
+          if pointer do
+            path = pointer_to_path(pointer)
+            get_in(schema, path)
+          else
+            schema
+          end
 
-    case Map.get(context.cache, cache_key) do
-      nil ->
-        case load_schema(full_path) do
-          {:ok, schema} ->
-            target =
-              if pointer do
-                path = pointer_to_path(pointer)
-                get_in(schema, path)
-              else
-                schema
-              end
-
-            if target do
-              new_context = %{
-                context
-                | schema_path: full_path,
-                  root_schema: schema,
-                  cache: Map.put(context.cache, cache_key, target)
-              }
-
-              resolve_schema(target, new_context)
-            else
-              {:error, {:ref_not_found, file_path <> "#" <> (pointer || "")}}
-            end
-
-          error ->
-            error
+        if target do
+          new_context = %{context | schema_path: full_path, root_schema: schema}
+          resolve_schema(target, new_context)
+        else
+          {:error, {:ref_not_found, file_path <> "#" <> (pointer || "")}}
         end
 
-      cached ->
-        {:ok, cached, context}
+      error ->
+        error
     end
   end
 

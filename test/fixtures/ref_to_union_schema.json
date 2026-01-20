@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/ref_to_union.json",
+  "title": "Container with Union Ref",
+  "type": "object",
+  "required": ["id", "message"],
+  "properties": {
+    "id": {
+      "type": "string"
+    },
+    "message": {
+      "$ref": "one_of_schema.json"
+    }
+  }
+}

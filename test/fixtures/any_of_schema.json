@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/any_of.json",
+  "title": "Flexible Message",
+  "description": "A flexible type that can match any of the variants.",
+  "anyOf": [
+    {
+      "$ref": "one_of_message_error.json"
+    },
+    {
+      "$ref": "one_of_message_warning.json"
+    }
+  ]
+}
