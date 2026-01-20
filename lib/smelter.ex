@@ -33,7 +33,7 @@ defmodule Smelter do
   - `:generator` - Code generator module (default: `Smelter.Generator.Schemecto`)
   """
 
-  alias Smelter.{Resolver, Generator}
+  alias Smelter.{Generator, Resolver}
 
   @type schema :: map()
   @type opts :: keyword()
@@ -46,9 +46,8 @@ defmodule Smelter do
   @spec parse(Path.t(), opts()) :: {:ok, schema()} | {:error, term()}
   def parse(schema_path, opts \\ []) do
     with {:ok, content} <- File.read(schema_path),
-         {:ok, schema} <- JSON.decode(content),
-         {:ok, resolved} <- Resolver.resolve(schema, schema_path, opts) do
-      {:ok, resolved}
+         {:ok, schema} <- JSON.decode(content) do
+      Resolver.resolve(schema, schema_path, opts)
     end
   end
 

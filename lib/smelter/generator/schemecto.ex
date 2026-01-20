@@ -133,7 +133,8 @@ defmodule Smelter.Generator.Schemecto do
 
     cond do
       # All variants have inline discriminators
-      length(inline_discriminators) == length(variants) and length(variants) > 0 ->
+      inline_discriminators != [] and
+          length(inline_discriminators) == length(variants) ->
         {:discriminated, :type, Enum.map(inline_discriminators, fn {:type, v} -> v end)}
 
       # All variants are refs - try to infer discriminator from module names
@@ -215,8 +216,7 @@ defmodule Smelter.Generator.Schemecto do
     a_chars
     |> Enum.zip(b_chars)
     |> Enum.take_while(fn {c1, c2} -> c1 == c2 end)
-    |> Enum.map(fn {c, _} -> c end)
-    |> Enum.join()
+    |> Enum.map_join(fn {c, _} -> c end)
   end
 
   # Build @variants module attribute
@@ -516,15 +516,13 @@ defmodule Smelter.Generator.Schemecto do
           |> Path.basename(".json")
           |> String.replace(~r/[._]/, " ")
           |> String.split()
-          |> Enum.map(&String.capitalize/1)
-          |> Enum.join()
+          |> Enum.map_join(&String.capitalize/1)
 
         schema["title"] ->
           schema["title"]
           |> String.replace(~r/[^a-zA-Z0-9\s]/, "")
           |> String.split()
-          |> Enum.map(&String.capitalize/1)
-          |> Enum.join()
+          |> Enum.map_join(&String.capitalize/1)
 
         true ->
           "Schema"

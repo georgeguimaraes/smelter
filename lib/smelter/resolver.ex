@@ -367,14 +367,12 @@ defmodule Smelter.Resolver do
       relative
       |> Path.rootname(".json")
       |> String.split("/")
-      |> Enum.map(fn part ->
+      |> Enum.map_join(".", fn part ->
         part
         |> String.replace(~r/[._]/, " ")
         |> String.split()
-        |> Enum.map(&String.capitalize/1)
-        |> Enum.join()
+        |> Enum.map_join(&String.capitalize/1)
       end)
-      |> Enum.join(".")
 
     "#{context.module_prefix}.#{module_suffix}"
   end
