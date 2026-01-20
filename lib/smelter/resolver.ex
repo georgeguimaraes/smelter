@@ -58,13 +58,17 @@ defmodule Smelter.Resolver do
             error
         end
 
-      {:file, _file_path, _pointer} ->
-        # File refs - just annotate with module info, don't recursively resolve
-        # This avoids path confusion when processing sibling properties
+      {:file, file_path, pointer} ->
+        # File refs - annotate with module info and check if target is a union type
+        # Don't recursively resolve to avoid path confusion
+        full_path = Path.expand(file_path, Path.dirname(context.schema_path))
+        ref_type = determine_ref_type(full_path, pointer)
+
         annotated =
           schema
           |> Map.put(:_ref, ref)
           |> Map.put(:_ref_module, ref_to_module(ref, context))
+          |> Map.put(:_ref_type, ref_type)
 
         {:ok, annotated, context}
     end
@@ -295,6 +299,29 @@ defmodule Smelter.Resolver do
       {:ok, schema}
     else
       {:error, reason} -> {:error, {:file_error, path, reason}}
+    end
+  end
+
+  # Determine the type of schema a ref points to (union or regular)
+  defp determine_ref_type(file_path, pointer) do
+    case load_schema(file_path) do
+      {:ok, schema} ->
+        target =
+          if pointer do
+            path = pointer_to_path(pointer)
+            get_in(schema, path)
+          else
+            schema
+          end
+
+        if is_map(target) and (Map.has_key?(target, "oneOf") or Map.has_key?(target, "anyOf")) do
+          :union
+        else
+          :regular
+        end
+
+      {:error, _} ->
+        :regular
     end
   end
 

@@ -67,10 +67,18 @@ defmodule Smelter.TypeMapper do
     end
   end
 
-  # Map a $ref to Schemecto.one
+  # Map a $ref to Schemecto.one or union cast
   defp map_ref_type(property) do
     module = property[:_ref_module]
-    {:ref, [module: module, cardinality: :one]}
+    ref_type = property[:_ref_type] || :regular
+
+    case ref_type do
+      :union ->
+        {:union_ref, [module: module]}
+
+      :regular ->
+        {:ref, [module: module, cardinality: :one]}
+    end
   end
 
   # Map composition types (oneOf, anyOf, allOf)
@@ -308,6 +316,11 @@ defmodule Smelter.TypeMapper do
     end
   end
 
+  def to_ecto_type({:union_ref, _opts}) do
+    # Union types need runtime casting - represented as map in schema
+    ":map"
+  end
+
   def to_ecto_type({:union, _opts}) do
     # Unions are complex - for now, map to :map
     ":map"
@@ -369,6 +382,12 @@ defmodule Smelter.TypeMapper do
           Schemecto.many(unquote(module_ast).fields(), with: &Function.identity/1)
         end
     end
+  end
+
+  def to_type_ast({:union_ref, _opts}) do
+    # Union types are cast via Module.cast/1 at runtime
+    # For now, represent as :map since Ecto doesn't have native union support
+    :map
   end
 
   def to_type_ast({:union, _opts}), do: :map
