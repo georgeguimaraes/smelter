@@ -78,51 +78,7 @@ defmodule Smelter.Resolver do
         end
 
       {:file, file_path, pointer} ->
-        # File refs - check if target is generatable before adding module ref
-        full_path = Path.expand(file_path, Path.dirname(context.schema_path))
-
-        # Load target schema to check if it's generatable
-        case load_and_get_target(full_path, pointer) do
-          {:ok, target_schema} ->
-            if generatable_schema?(target_schema) do
-              ref_type = determine_ref_type_from_schema(target_schema)
-
-              annotated =
-                schema
-                |> Map.put(:_ref, ref)
-                |> Map.put(:_ref_module, ref_to_module(ref, context))
-                |> Map.put(:_ref_type, ref_type)
-
-              {:ok, annotated, context}
-            else
-              # Target is a simple type - resolve it inline
-              case resolve_ref(ref, context) do
-                {:ok, resolved, new_context} ->
-                  merged =
-                    schema
-                    |> Map.delete("$ref")
-                    |> Map.merge(resolved, fn _k, v1, _v2 -> v1 end)
-                    |> Map.put(:_ref, ref)
-
-                  {:ok, merged, new_context}
-
-                error ->
-                  error
-              end
-            end
-
-          {:error, _} ->
-            # Fallback to just annotating with module
-            ref_type = determine_ref_type(full_path, pointer)
-
-            annotated =
-              schema
-              |> Map.put(:_ref, ref)
-              |> Map.put(:_ref_module, ref_to_module(ref, context))
-              |> Map.put(:_ref_type, ref_type)
-
-            {:ok, annotated, context}
-        end
+        resolve_file_ref(schema, ref, file_path, pointer, context)
     end
   end
 
@@ -204,6 +160,62 @@ defmodule Smelter.Resolver do
 
   defp resolve_schema(schema, context) do
     {:ok, schema, context}
+  end
+
+  # Helper functions for file ref resolution (must be after all resolve_schema clauses)
+
+  defp resolve_file_ref(schema, ref, file_path, pointer, context) do
+    full_path = Path.expand(file_path, Path.dirname(context.schema_path))
+
+    case load_and_get_target(full_path, pointer) do
+      {:ok, target_schema} ->
+        resolve_file_ref_target(schema, ref, target_schema, full_path, context)
+
+      {:error, _} ->
+        # Fallback to just annotating with module
+        ref_type = determine_ref_type(full_path, pointer)
+
+        annotated =
+          schema
+          |> Map.put(:_ref, ref)
+          |> Map.put(:_ref_module, ref_to_module(ref, context))
+          |> Map.put(:_ref_type, ref_type)
+
+        {:ok, annotated, context}
+    end
+  end
+
+  defp resolve_file_ref_target(schema, ref, target_schema, _full_path, context) do
+    if generatable_schema?(target_schema) do
+      ref_type = determine_ref_type_from_schema(target_schema)
+
+      annotated =
+        schema
+        |> Map.put(:_ref, ref)
+        |> Map.put(:_ref_module, ref_to_module(ref, context))
+        |> Map.put(:_ref_type, ref_type)
+
+      {:ok, annotated, context}
+    else
+      # Target is a simple type - resolve it inline
+      resolve_simple_ref_inline(schema, ref, context)
+    end
+  end
+
+  defp resolve_simple_ref_inline(schema, ref, context) do
+    case resolve_ref(ref, context) do
+      {:ok, resolved, new_context} ->
+        merged =
+          schema
+          |> Map.delete("$ref")
+          |> Map.merge(resolved, fn _k, v1, _v2 -> v1 end)
+          |> Map.put(:_ref, ref)
+
+        {:ok, merged, new_context}
+
+      error ->
+        error
+    end
   end
 
   # Resolve a list of schemas
