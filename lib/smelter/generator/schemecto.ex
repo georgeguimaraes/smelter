@@ -103,7 +103,7 @@ defmodule Smelter.Generator.Schemecto do
     body =
       [
         moduledoc,
-        quote(do: import(Ecto.Changeset)),
+        # Note: No import needed - union types reference Ecto.Changeset by full name
         variants_ast,
         quote(do: @doc("Returns the variant modules for this union type.")),
         quote(do: def(variants, do: @variants)),
@@ -323,11 +323,17 @@ defmodule Smelter.Generator.Schemecto do
     # Build body as flat list - avoid nested blocks that cause extra parens
     {new_doc, new_def} = new_fn_ast
 
+    # Only import Ecto.Changeset if we need validate_required (has required fields)
+    import_ast =
+      if required_atoms != [] do
+        [quote(do: import(Ecto.Changeset))]
+      else
+        []
+      end
+
     body =
-      [
-        moduledoc,
-        quote(do: import(Ecto.Changeset))
-      ] ++
+      [moduledoc] ++
+        import_ast ++
         enum_attr_asts ++
         [
           fields_ast,
