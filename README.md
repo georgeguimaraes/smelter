@@ -2,7 +2,7 @@
 
 JSON Schema to Elixir code generator. Extracts pure Elixir types from raw JSON Schema ore.
 
-Generates [Schemecto](https://github.com/josevalim/schemecto)-compatible modules that provide `new/1` for validation and `fields/0` for introspection.
+Generates Ecto.Schema modules with `embedded_schema` and `changeset/2` for validation.
 
 ## Features
 
@@ -58,28 +58,6 @@ This processes all `.json` files in the directory, including:
 - Union schemas (`oneOf`/`anyOf`)
 - `$defs` entries within schemas
 
-## Generator Formats
-
-Smelter supports two output formats:
-
-### Schemecto (default)
-
-Generates [Schemecto](https://github.com/josevalim/schemecto)-compatible modules with `@fields`, `new/1`, and `fields/0`:
-
-```elixir
-Smelter.generate(schema, module: "MyApp.Schemas.User")
-```
-
-### Pure Ecto.Schema
-
-Generates standard Ecto.Schema modules with `embedded_schema` and `changeset/2`:
-
-```elixir
-Smelter.generate(schema, format: :ecto_schema, module: "MyApp.Schemas.User")
-```
-
-This format is useful when you need standard Ecto structs and changesets without the Schemecto dependency.
-
 ## Generated Code
 
 Given a JSON Schema like:
@@ -104,20 +82,19 @@ defmodule MyApp.Schemas.User do
   @moduledoc """
   User
   """
+  use Ecto.Schema
   import Ecto.Changeset
 
-  @fields [
-    %{name: :age, type: :integer},
-    %{name: :email, type: :string},
-    %{name: :name, type: :string}
-  ]
+  @primary_key false
+  embedded_schema do
+    field :age, :integer
+    field :email, :string
+    field :name, :string
+  end
 
-  @doc "Returns the field definitions for this schema."
-  def fields, do: @fields
-
-  @doc "Creates a new changeset from params."
-  def new(params \\ %{}) do
-    Schemecto.new(@fields, params)
+  def changeset(struct \\ %__MODULE__{}, params) do
+    struct
+    |> cast(params, [:age, :email, :name])
     |> validate_required([:email, :name])
   end
 end
