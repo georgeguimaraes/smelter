@@ -68,9 +68,11 @@ defmodule Smelter.Generator.EctoSchema do
         indented =
           unescaped
           |> String.split("\n")
-          |> Enum.join("\n  ")
+          |> Enum.map_join("\n", fn line ->
+            if line == "", do: "", else: "  #{line}"
+          end)
 
-        ~s|@moduledoc """\n  #{indented}\n  """|
+        ~s|@moduledoc """\n#{indented}\n  """|
       end
     )
   end
