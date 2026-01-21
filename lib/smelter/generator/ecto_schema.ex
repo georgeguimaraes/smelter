@@ -43,9 +43,15 @@ defmodule Smelter.Generator.EctoSchema do
     |> post_process()
   end
 
-  # Post-process for heredoc formatting
+  # Post-process for heredoc formatting and trailing newline
   defp post_process(code) do
-    convert_moduledoc_to_heredoc(code)
+    code
+    |> convert_moduledoc_to_heredoc()
+    |> ensure_trailing_newline()
+  end
+
+  defp ensure_trailing_newline(code) do
+    if String.ends_with?(code, "\n"), do: code, else: code <> "\n"
   end
 
   defp convert_moduledoc_to_heredoc(code) do
@@ -79,18 +85,20 @@ defmodule Smelter.Generator.EctoSchema do
       |> Enum.map(& &1[:_ref_module])
 
     discriminator = detect_discriminator(variants)
+    alias_statements = build_union_alias_statements(variant_modules)
     variants_ast = build_variants_attr(variant_modules)
     {cast_doc, cast_def} = build_union_cast_fn(variant_modules, discriminator, strategy, opts)
 
     body =
-      [
-        moduledoc,
-        variants_ast,
-        quote(do: @doc("Returns the variant modules for this union type.")),
-        quote(do: def(variants, do: @variants)),
-        cast_doc,
-        cast_def
-      ]
+      [moduledoc] ++
+        alias_statements ++
+        [
+          variants_ast,
+          quote(do: @doc("Returns the variant modules for this union type.")),
+          quote(do: def(variants, do: @variants)),
+          cast_doc,
+          cast_def
+        ]
 
     {:defmodule, [context: Elixir],
      [
@@ -183,13 +191,27 @@ defmodule Smelter.Generator.EctoSchema do
   defp map_to_ecto_field_type({:array, inner}, _opts), do: {:array, inner}
   defp map_to_ecto_field_type(type, _opts), do: Map.get(@ecto_type_mappings, type, :map)
 
-  # Build alias statements for embedded modules
+  # Build alias statements for embedded modules (sorted alphabetically)
   defp build_alias_statements([]), do: []
 
   defp build_alias_statements(embeds) do
     embeds
     |> Enum.map(& &1.module)
     |> Enum.uniq()
+    |> Enum.sort()
+    |> Enum.map(fn module ->
+      module_ast = module_to_ast(module)
+      quote(do: alias(unquote(module_ast)))
+    end)
+  end
+
+  # Build alias statements for union variant modules (sorted alphabetically)
+  defp build_union_alias_statements([]), do: []
+
+  defp build_union_alias_statements(modules) do
+    modules
+    |> Enum.uniq()
+    |> Enum.sort()
     |> Enum.map(fn module ->
       module_ast = module_to_ast(module)
       quote(do: alias(unquote(module_ast)))
@@ -461,7 +483,8 @@ defmodule Smelter.Generator.EctoSchema do
     clauses =
       Enum.map(variant_modules, fn mod ->
         discriminator_value = infer_discriminator_value(mod)
-        mod_ast = module_to_ast(mod)
+        # Use short alias name instead of fully qualified
+        mod_ast = module_to_short_ast(mod)
 
         quote do
           %{unquote(field_string) => unquote(discriminator_value)} ->
@@ -494,7 +517,8 @@ defmodule Smelter.Generator.EctoSchema do
   end
 
   defp build_sequential_cast(variant_modules) do
-    module_asts = Enum.map(variant_modules, &module_to_ast/1)
+    # Use short alias names instead of fully qualified
+    module_asts = Enum.map(variant_modules, &module_to_short_ast/1)
 
     quote do
       def cast(params) when is_map(params) do
@@ -521,6 +545,12 @@ defmodule Smelter.Generator.EctoSchema do
   defp module_to_ast(module_string) when is_binary(module_string) do
     parts = module_string |> String.split(".") |> Enum.map(&String.to_atom/1)
     {:__aliases__, [alias: false], parts}
+  end
+
+  # Convert "Foo.Bar.Baz" to just {:__aliases__, [], [:Baz]} for use with aliases
+  defp module_to_short_ast(module_string) when is_binary(module_string) do
+    last_part = module_string |> String.split(".") |> List.last() |> String.to_atom()
+    {:__aliases__, [alias: false], [last_part]}
   end
 
   defp to_safe_atom(value) when is_binary(value), do: String.to_atom(value)
