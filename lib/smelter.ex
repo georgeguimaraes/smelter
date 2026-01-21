@@ -2,19 +2,18 @@ defmodule Smelter do
   @moduledoc """
   Smelter: JSON Schema to Elixir Code Generator
 
-  Extracts pure Elixir types from raw JSON Schema ore. A robust library for
-  generating Elixir code from JSON Schema definitions. Handles $ref resolution,
-  oneOf/anyOf/allOf composition, nested objects, and generates Schemecto-compatible
-  field definitions.
+  Extracts pure Elixir types from raw JSON Schema ore. Generates Ecto.Schema
+  modules from JSON Schema definitions with full $ref resolution and schema
+  composition support.
 
   ## Features
 
   - Full $ref resolution (local, cross-file, JSON pointers)
   - Schema composition (oneOf, anyOf, allOf)
   - Enum and const handling
-  - Format specifiers (date-time, uri, email)
+  - Format specifiers (date-time, uri, email, uuid)
   - Nested object and array handling
-  - Configurable code generation
+  - Batch generation from schema directories
 
   ## Usage
 
@@ -24,13 +23,16 @@ defmodule Smelter do
       # Generate Elixir code
       code = Smelter.generate(schema, module: "MyApp.Schemas.User")
 
+      # Or do both in one step
+      {:ok, code} = Smelter.compile("path/to/schema.json", module: "MyApp.Schemas.User")
+
   ## Configuration
 
   Smelter can be configured with:
 
+  - `:module` - Full module name for generated schema
   - `:module_prefix` - Base module prefix for generated schemas
   - `:schemas_dir` - Base directory for schema resolution
-  - `:generator` - Code generator module (default: `Smelter.Generator.Schemecto`)
   """
 
   alias Smelter.{Generator, Resolver}
@@ -58,12 +60,10 @@ defmodule Smelter do
 
   - `:module` - Full module name for the generated schema
   - `:module_prefix` - Prefix for inferred module names (default: "Smelter.Generated")
-  - `:generator` - Generator module (default: `Smelter.Generator.Schemecto`)
   """
   @spec generate(schema(), opts()) :: String.t()
   def generate(schema, opts \\ []) do
-    generator = opts[:generator] || Generator.Schemecto
-    generator.generate(schema, opts)
+    Generator.generate(schema, opts)
   end
 
   @doc """

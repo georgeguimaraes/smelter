@@ -9,4 +9,4 @@
 - Schema composition support (`allOf`, `oneOf`, `anyOf`)
 - Enum and const handling
 - Format specifiers (date-time, uri, email, uuid)
-- Schemecto-compatible code generation
+- Ecto.Schema code generation with changeset/2

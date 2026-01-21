@@ -1,9 +1,6 @@
 defmodule Smelter.Generator.EctoSchema do
   @moduledoc """
-  Generates pure Ecto.Schema modules from resolved JSON Schemas.
-
-  Unlike the Schemecto generator, this produces static embedded schemas
-  with proper `embeds_one`/`embeds_many` associations.
+  Generates Ecto.Schema modules from resolved JSON Schemas.
 
   Produces modules with:
   - `use Ecto.Schema` and `import Ecto.Changeset`
