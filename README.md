@@ -58,6 +58,28 @@ This processes all `.json` files in the directory, including:
 - Union schemas (`oneOf`/`anyOf`)
 - `$defs` entries within schemas
 
+## Generator Formats
+
+Smelter supports two output formats:
+
+### Schemecto (default)
+
+Generates [Schemecto](https://github.com/josevalim/schemecto)-compatible modules with `@fields`, `new/1`, and `fields/0`:
+
+```elixir
+Smelter.generate(schema, module: "MyApp.Schemas.User")
+```
+
+### Pure Ecto.Schema
+
+Generates standard Ecto.Schema modules with `embedded_schema` and `changeset/2`:
+
+```elixir
+Smelter.generate(schema, format: :ecto_schema, module: "MyApp.Schemas.User")
+```
+
+This format is useful when you need standard Ecto structs and changesets without the Schemecto dependency.
+
 ## Generated Code
 
 Given a JSON Schema like:
