@@ -218,34 +218,40 @@ defmodule Smelter.Resolver do
     end
   end
 
-  # Resolve a list of schemas
+  # Resolve a list of schemas, preserving original context for each.
+  # This prevents file ref resolution from polluting sibling schemas
+  # (e.g., changing root_schema would break local refs in siblings).
   defp resolve_all(schemas, context) do
-    Enum.reduce_while(schemas, {:ok, [], context}, fn schema, {:ok, acc, ctx} ->
-      case resolve_schema(schema, ctx) do
-        {:ok, resolved, new_ctx} -> {:cont, {:ok, [resolved | acc], new_ctx}}
-        error -> {:halt, error}
-      end
-    end)
-    |> case do
-      {:ok, resolved, ctx} -> {:ok, Enum.reverse(resolved), ctx}
-      error -> error
-    end
+    schemas
+    |> map_ok(&resolve_schema(&1, context))
+    |> wrap_context(context)
   end
 
-  # Resolve a list of schemas with full resolution of file refs
-  # Used for allOf where we need to merge all properties
+  # Resolve a list of schemas with full resolution of file refs.
+  # Used for allOf where we need to merge all properties.
   defp resolve_all_fully(schemas, context) do
-    Enum.reduce_while(schemas, {:ok, [], context}, fn schema, {:ok, acc, ctx} ->
-      case resolve_schema_fully(schema, ctx) do
-        {:ok, resolved, new_ctx} -> {:cont, {:ok, [resolved | acc], new_ctx}}
-        error -> {:halt, error}
+    schemas
+    |> map_ok(&resolve_schema_fully(&1, context))
+    |> wrap_context(context)
+  end
+
+  # Maps over a list, stopping on first error. Returns {:ok, results} or {:error, reason}.
+  defp map_ok(list, fun) do
+    Enum.reduce_while(list, {:ok, []}, fn item, {:ok, acc} ->
+      case fun.(item) do
+        {:ok, resolved, _ctx} -> {:cont, {:ok, [resolved | acc]}}
+        {:error, _} = error -> {:halt, error}
       end
     end)
-    |> case do
-      {:ok, resolved, ctx} -> {:ok, Enum.reverse(resolved), ctx}
+    |> then(fn
+      {:ok, resolved} -> {:ok, Enum.reverse(resolved)}
       error -> error
-    end
+    end)
   end
+
+  # Wraps a result with context for the resolver's return signature.
+  defp wrap_context({:ok, resolved}, context), do: {:ok, resolved, context}
+  defp wrap_context(error, _context), do: error
 
   # Resolve a schema, fully resolving file refs (for use in allOf)
   defp resolve_schema_fully(%{"$ref" => ref} = schema, context) do
@@ -269,14 +275,17 @@ defmodule Smelter.Resolver do
     resolve_schema(schema, context)
   end
 
-  # Resolve all properties in a properties map
+  # Resolve all properties in a properties map.
+  # Each property is resolved with the original context to prevent cross-contamination.
   defp resolve_properties(props, context) do
-    Enum.reduce_while(props, {:ok, %{}, context}, fn {name, prop}, {:ok, acc, ctx} ->
-      case resolve_schema(prop, ctx) do
-        {:ok, resolved, new_ctx} -> {:cont, {:ok, Map.put(acc, name, resolved), new_ctx}}
-        error -> {:halt, error}
+    props
+    |> Enum.reduce_while({:ok, %{}}, fn {name, prop}, {:ok, acc} ->
+      case resolve_schema(prop, context) do
+        {:ok, resolved, _ctx} -> {:cont, {:ok, Map.put(acc, name, resolved)}}
+        {:error, _} = error -> {:halt, error}
       end
     end)
+    |> wrap_context(context)
   end
 
   # Resolve a $ref string to its target schema
@@ -305,11 +314,16 @@ defmodule Smelter.Resolver do
 
   # Resolve a local reference within the same schema
   defp resolve_local_ref(pointer, context) do
-    path = pointer_to_path(pointer)
+    # Empty pointer means root schema itself
+    if pointer == "" do
+      resolve_schema(context.root_schema, context)
+    else
+      path = pointer_to_path(pointer)
 
-    case get_in(context.root_schema, path) do
-      nil -> {:error, {:ref_not_found, "#" <> pointer}}
-      target -> resolve_schema(target, context)
+      case get_in(context.root_schema, path) do
+        nil -> {:error, {:ref_not_found, "#" <> pointer}}
+        target -> resolve_schema(target, context)
+      end
     end
   end
 
