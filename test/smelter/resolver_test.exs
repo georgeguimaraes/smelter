@@ -250,5 +250,41 @@ defmodule Smelter.ResolverTest do
       # Should fail because #/$defs/version doesn't exist in profile_def
       assert {:error, {:ref_not_found, "#/$defs/version"}} = Resolver.resolve(profile_def, path)
     end
+
+    test "preserves context for local refs in allOf siblings after file ref" do
+      # This tests the fix for context isolation: when allOf has a file ref
+      # followed by a schema with local refs, the local refs should resolve
+      # from the original schema, not from the file ref's schema.
+      path = Path.join(@fixtures_path, "allof_sibling_context.json")
+      {:ok, schema} = File.read!(path) |> JSON.decode!() |> then(&{:ok, &1})
+      assert {:ok, resolved} = Resolver.resolve(schema, path)
+
+      # The allOf should merge successfully
+      assert resolved["title"] == "AllOf Sibling Context Test"
+
+      # Properties from file ref (all_of_base.json) should be merged
+      assert resolved["properties"]["id"]["type"] == "string"
+      assert resolved["properties"]["created_at"]["format"] == "date-time"
+
+      # Local ref in sibling should resolve correctly from original schema
+      extension = resolved["properties"]["extension"]
+      assert extension[:_ref] == "#/$defs/local_extension"
+      assert extension["properties"]["extra_field"]["type"] == "string"
+    end
+
+    test "resolves $ref to root schema (#)" do
+      path = Path.join(@fixtures_path, "root_self_ref.json")
+      {:ok, root_schema} = File.read!(path) |> JSON.decode!() |> then(&{:ok, &1})
+
+      # Resolve the extended $def which uses $ref: "#" to reference root
+      extended_def = root_schema["$defs"]["extended"]
+      assert {:ok, resolved} = Resolver.resolve(extended_def, path, root_schema: root_schema)
+
+      # Should have merged properties from root schema and the extension
+      assert resolved["title"] == "Extended Version"
+      assert resolved["properties"]["id"]["type"] == "string"
+      assert resolved["properties"]["name"]["type"] == "string"
+      assert resolved["properties"]["selected"]["type"] == "boolean"
+    end
   end
 end

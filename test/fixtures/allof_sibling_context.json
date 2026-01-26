@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "AllOf Sibling Context Test",
+  "description": "Tests that local refs in allOf siblings resolve correctly after file ref",
+  "$defs": {
+    "local_extension": {
+      "type": "object",
+      "properties": {
+        "extra_field": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "$ref": "all_of_base.json"
+    },
+    {
+      "type": "object",
+      "properties": {
+        "extension": {
+          "$ref": "#/$defs/local_extension"
+        }
+      }
+    }
+  ]
+}
