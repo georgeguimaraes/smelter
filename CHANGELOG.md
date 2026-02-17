@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.1.2](https://github.com/georgeguimaraes/smelter/compare/v0.1.1...v0.1.2) (2026-02-17)
+
+
+### Bug Fixes
+
+* **ci:** publish to hex directly from release-please workflow ([3c07432](https://github.com/georgeguimaraes/smelter/commit/3c07432cf02b4186849fa6471b0134393da540f9))
+
+
+### Miscellaneous
+
+* **deps-dev:** bump credo from 1.7.15 to 1.7.16 ([#4](https://github.com/georgeguimaraes/smelter/issues/4)) ([20a16e4](https://github.com/georgeguimaraes/smelter/commit/20a16e4a69c25e5a47cce1b56fdf5f89b01fa259))
+* **deps-dev:** bump ex_doc from 0.40.0 to 0.40.1 ([#5](https://github.com/georgeguimaraes/smelter/issues/5)) ([164409e](https://github.com/georgeguimaraes/smelter/commit/164409ee496211d563e637c0b7c10ca7dd147ffe))
+* remove unused on-release workflow ([eed15c4](https://github.com/georgeguimaraes/smelter/commit/eed15c4c3ef42996cce932e205b42df4552d4514))
+
 ## [0.1.1](https://github.com/georgeguimaraes/smelter/compare/v0.1.0...v0.1.1) (2026-01-26)
 
 
