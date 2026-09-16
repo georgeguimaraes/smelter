@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.1.3](https://github.com/georgeguimaraes/smelter/compare/v0.1.2...v0.1.3) (2026-09-16)
+
+
+### Miscellaneous
+
+* **deps:** Bump ecto, credo, ex_doc and test on Elixir 1.20 / OTP 29 ([#14](https://github.com/georgeguimaraes/smelter/issues/14)) ([8d43623](https://github.com/georgeguimaraes/smelter/commit/8d436237799d0554b8534988802927cd45eedb77))
+
+
+### Documentation
+
+* Point the install snippet at the current release ([e6b34a9](https://github.com/georgeguimaraes/smelter/commit/e6b34a9a9caf00fc1c1fca4ebe42076024d27324))
+
 ## [0.1.2](https://github.com/georgeguimaraes/smelter/compare/v0.1.1...v0.1.2) (2026-02-17)
 
 
