@@ -21,7 +21,7 @@ Add `smelter` to your list of dependencies in `mix.exs`:
 ```elixir
 def deps do
   [
-    {:smelter, "~> 0.1.0"}
+    {:smelter, "~> 0.1"}
   ]
 end
 ```
