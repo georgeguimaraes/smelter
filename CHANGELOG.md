@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.1.4](https://github.com/georgeguimaraes/smelter/compare/v0.1.3...v0.1.4) (2026-09-17)
+
+
+### Bug Fixes
+
+* Cut recursive $refs instead of expanding them forever ([0eeaead](https://github.com/georgeguimaraes/smelter/commit/0eeaead37651caf946a5de1e05807f2cc6a9d5ca))
+
+
+### Miscellaneous
+
+* Pin Dependabot commit prefix to chore(deps) ([eecead1](https://github.com/georgeguimaraes/smelter/commit/eecead157a6263f1ce4208d3827c8d114b22d73f))
+
 ## [0.1.3](https://github.com/georgeguimaraes/smelter/compare/v0.1.2...v0.1.3) (2026-09-16)
 
 
