@@ -30,13 +30,20 @@ defmodule Smelter.Resolver do
     # Allow passing a root_schema for resolving local refs in $def entries
     root_schema = opts[:root_schema] || schema
 
+    # When the schema being resolved is the root, a `$ref: "#"` inside it is
+    # already a cycle, so the root starts out on the stack.
+    ref_stack =
+      if opts[:root_schema], do: MapSet.new(), else: MapSet.new([{expanded_path, ""}])
+
     context = %{
       schema_path: expanded_path,
       # original_schema_path tracks where we started - used for relative file refs
       original_schema_path: expanded_path,
       schemas_dir: opts[:schemas_dir] || find_schemas_dir(schema_path),
       module_prefix: opts[:module_prefix] || "Smelter.Generated",
-      root_schema: root_schema
+      root_schema: root_schema,
+      # Refs currently being expanded on this branch, to cut recursive schemas
+      ref_stack: ref_stack
     }
 
     case resolve_schema(schema, context) do
@@ -314,42 +321,63 @@ defmodule Smelter.Resolver do
 
   # Resolve a local reference within the same schema
   defp resolve_local_ref(pointer, context) do
-    # Empty pointer means root schema itself
-    if pointer == "" do
-      resolve_schema(context.root_schema, context)
-    else
-      path = pointer_to_path(pointer)
+    guard_cycle({context.schema_path, pointer}, context, fn context ->
+      # Empty pointer means root schema itself
+      if pointer == "" do
+        resolve_schema(context.root_schema, context)
+      else
+        path = pointer_to_path(pointer)
 
-      case get_in(context.root_schema, path) do
-        nil -> {:error, {:ref_not_found, "#" <> pointer}}
-        target -> resolve_schema(target, context)
+        case get_in(context.root_schema, path) do
+          nil -> {:error, {:ref_not_found, "#" <> pointer}}
+          target -> resolve_schema(target, context)
+        end
       end
-    end
+    end)
   end
 
   # Resolve a reference to another file
   defp resolve_file_ref(file_path, pointer, context) do
     full_path = Path.expand(file_path, Path.dirname(context.schema_path))
 
-    case load_schema(full_path) do
-      {:ok, schema} ->
-        target =
-          if pointer do
-            path = pointer_to_path(pointer)
-            get_in(schema, path)
+    guard_cycle({full_path, pointer || ""}, context, fn context ->
+      case load_schema(full_path) do
+        {:ok, schema} ->
+          target =
+            if pointer do
+              path = pointer_to_path(pointer)
+              get_in(schema, path)
+            else
+              schema
+            end
+
+          if target do
+            new_context = %{context | schema_path: full_path, root_schema: schema}
+            resolve_schema(target, new_context)
           else
-            schema
+            {:error, {:ref_not_found, file_path <> "#" <> (pointer || "")}}
           end
 
-        if target do
-          new_context = %{context | schema_path: full_path, root_schema: schema}
-          resolve_schema(target, new_context)
-        else
-          {:error, {:ref_not_found, file_path <> "#" <> (pointer || "")}}
-        end
+        error ->
+          error
+      end
+    end)
+  end
 
-      error ->
-        error
+  # A ref that is already being expanded on this branch is recursive. It is
+  # returned as an opaque object, which the type mapper turns into a plain map,
+  # instead of being expanded forever.
+  defp guard_cycle(key, context, fun) do
+    if MapSet.member?(context.ref_stack, key) do
+      {:ok, %{"type" => "object", :_recursive => true}, context}
+    else
+      case fun.(%{context | ref_stack: MapSet.put(context.ref_stack, key)}) do
+        {:ok, resolved, new_context} ->
+          {:ok, resolved, %{new_context | ref_stack: context.ref_stack}}
+
+        error ->
+          error
+      end
     end
   end
 

@@ -286,5 +286,23 @@ defmodule Smelter.ResolverTest do
       assert resolved["properties"]["name"]["type"] == "string"
       assert resolved["properties"]["selected"]["type"] == "boolean"
     end
+
+    test "cuts recursive refs into opaque objects instead of expanding forever" do
+      path = Path.join(@fixtures_path, "recursive_schema.json")
+      assert {:ok, resolved} = Smelter.parse(path)
+
+      # `$ref: "#"` inside the root is a cycle right away
+      items = resolved["properties"]["branches"]["items"]
+      assert items[:_recursive] == true
+      refute Map.has_key?(items, "properties")
+
+      # A $def referring to itself expands once, then stops
+      node = resolved["properties"]["tree"]
+      assert node["properties"]["label"]["type"] == "string"
+      assert node["properties"]["children"]["items"][:_recursive] == true
+
+      code = Smelter.Generator.generate(resolved, module: "Test.Constraint", format: :ecto_schema)
+      assert code =~ "field(:branches, {:array, :map})"
+    end
   end
 end

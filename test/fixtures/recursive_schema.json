@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Constraint",
+  "description": "A recursive schema: branches contain constraints, and a def refers to itself",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string"
+    },
+    "branches": {
+      "type": "array",
+      "items": {
+        "$ref": "#"
+      }
+    },
+    "tree": {
+      "$ref": "#/$defs/node"
+    }
+  },
+  "$defs": {
+    "node": {
+      "type": "object",
+      "properties": {
+        "label": {
+          "type": "string"
+        },
+        "children": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/node"
+          }
+        }
+      }
+    }
+  }
+}
