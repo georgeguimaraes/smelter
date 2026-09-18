@@ -127,6 +127,31 @@ defmodule Smelter.TypeMapperTest do
       assert {{:array, :map}, _opts} = TypeMapper.map_type(property)
     end
 
+    test "maps a ref to an array schema by its cardinality" do
+      property = %{:_ref_module => "Test.Totals", :_ref_cardinality => :many}
+      assert {:ref, opts} = TypeMapper.map_type(property)
+      assert opts[:module] == "Test.Totals"
+      assert opts[:cardinality] == :many
+
+      union = %{:_ref_module => "Test.Union", :_ref_type => :union, :_ref_cardinality => :many}
+      assert {{:array, :map}, _opts} = TypeMapper.map_type(union)
+    end
+
+    test "maps an allOf-merged array or scalar by the merged content" do
+      array = %{
+        :_composition => {:all_of, []},
+        "type" => "array",
+        "items" => %{"type" => "string"}
+      }
+
+      assert {:array_of, opts} = TypeMapper.map_type(array)
+      assert opts[:inner_type] == :string
+
+      scalar = %{:_composition => {:all_of, []}, "type" => "integer", "minimum" => 1}
+      assert {:integer, opts} = TypeMapper.map_type(scalar)
+      assert opts[:minimum] == 1
+    end
+
     test "maps union ref type to :union_ref" do
       property = %{:_ref_module => "Test.UnionModule", :_ref_type => :union}
       assert {type, opts} = TypeMapper.map_type(property)

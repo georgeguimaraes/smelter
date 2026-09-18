@@ -24,6 +24,7 @@ defmodule Smelter.Generator.EctoSchema do
   def generate(schema, opts \\ []) do
     module_name = opts[:module] || infer_module_name(schema, opts)
     module_atom = String.to_atom("Elixir.#{module_name}")
+    schema = module_schema(schema)
 
     ast =
       case schema[:_composition] do
@@ -42,6 +43,14 @@ defmodule Smelter.Generator.EctoSchema do
     |> IO.iodata_to_binary()
     |> post_process()
   end
+
+  # An array schema generates the module for one of its items; parents embed
+  # it with embeds_many. The array's own title and description document it.
+  defp module_schema(%{"type" => "array", "items" => items} = schema) when is_map(items) do
+    Map.merge(items, Map.take(schema, ["title", "description", :_source_path]))
+  end
+
+  defp module_schema(schema), do: schema
 
   # Post-process for heredoc formatting and trailing newline
   defp post_process(code) do
@@ -183,15 +192,31 @@ defmodule Smelter.Generator.EctoSchema do
     date: :date,
     time: :time,
     binary_id: :binary_id,
-    array_of: {:array, :map},
     embedded: :map,
     union: :map,
     union_ref: :map
   }
 
+  @scalar_types [:string, :integer, :float, :boolean, :utc_datetime, :date, :time, :binary_id]
+
   # Map internal type to Ecto field type
   defp map_to_ecto_field_type({:array, inner}, _opts), do: {:array, inner}
+
+  defp map_to_ecto_field_type(:array_of, opts) do
+    inner = opts[:inner_type]
+    inner_opts = opts[:inner_opts] || []
+
+    cond do
+      inner in @scalar_types -> {:array, inner}
+      inner == :enum and string_enum?(inner_opts[:values]) -> {:array, :string}
+      true -> {:array, :map}
+    end
+  end
+
   defp map_to_ecto_field_type(type, _opts), do: Map.get(@ecto_type_mappings, type, :map)
+
+  defp string_enum?([_ | _] = values), do: Enum.all?(values, &is_binary/1)
+  defp string_enum?(_), do: false
 
   # Build alias statements for embedded modules (sorted alphabetically)
   defp build_alias_statements([]), do: []

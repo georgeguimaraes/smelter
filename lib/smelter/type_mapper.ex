@@ -71,13 +71,18 @@ defmodule Smelter.TypeMapper do
   defp map_ref_type(property) do
     module = property[:_ref_module]
     ref_type = property[:_ref_type] || :regular
+    cardinality = property[:_ref_cardinality] || :one
 
-    case ref_type do
-      :union ->
+    case {ref_type, cardinality} do
+      {:union, :one} ->
         {:union_ref, [module: module]}
 
-      :regular ->
-        {:ref, [module: module, cardinality: :one]}
+      {:union, :many} ->
+        # Union types don't have fields() - use {:array, :map}
+        {{:array, :map}, []}
+
+      {:regular, _} ->
+        {:ref, [module: module, cardinality: cardinality]}
     end
   end
 
@@ -93,12 +98,16 @@ defmodule Smelter.TypeMapper do
         {:union, [variants: variants, strategy: :any_of]}
 
       {:all_of, _schemas} ->
-        # allOf is already merged, treat as object
-        if property["properties"] do
-          map_nested_object_type(property)
-        else
-          {:map, []}
-        end
+        map_all_of_type(property)
+    end
+  end
+
+  # allOf is already merged, so map whatever the merge produced
+  defp map_all_of_type(property) do
+    cond do
+      property["type"] == "array" -> map_array_type(property)
+      property["properties"] -> map_nested_object_type(property)
+      true -> map_type(Map.delete(property, :_composition))
     end
   end
 

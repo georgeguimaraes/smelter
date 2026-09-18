@@ -57,28 +57,23 @@ defmodule Smelter.Resolver do
   # to avoid path confusion when processing sibling properties
   defp resolve_schema(%{"$ref" => ref} = schema, context) do
     case parse_ref(ref) do
-      {:local, _pointer} ->
+      {:local, pointer} ->
         # Local refs within the same file - resolve fully
         case resolve_ref(ref, context) do
           {:ok, resolved, new_context} ->
-            # Only add _ref_module if the resolved schema is generatable (has properties or composition)
-            # Simple types like {"type": "string"} should be inlined without a module reference
             merged =
               schema
               |> Map.delete("$ref")
               |> Map.merge(resolved, fn _k, v1, _v2 -> v1 end)
               |> Map.put(:_ref, ref)
 
-            merged =
-              if generatable_schema?(resolved) do
-                merged
-                |> Map.put(:_ref_module, ref_to_module(ref, context))
-                |> Map.put(:_ref_type, determine_schema_ref_type(resolved))
-              else
-                merged
-              end
+            # A recursive ref was cut to an opaque object and stays inline
+            kind =
+              if resolved[:_recursive],
+                do: :inline,
+                else: ref_kind(local_target(pointer, context))
 
-            {:ok, merged, new_context}
+            {:ok, annotate_ref(merged, kind, ref, resolved, context), new_context}
 
           error ->
             error
@@ -91,23 +86,18 @@ defmodule Smelter.Resolver do
 
   defp resolve_schema(%{"allOf" => schemas} = schema, context) do
     # allOf requires full resolution of all schemas including file refs
-    # because we need to merge all properties together
-    case resolve_all_fully(schemas, context) do
-      {:ok, resolved_schemas, new_context} ->
-        merged = merge_all_of(resolved_schemas)
+    # because we need to merge all properties together. The keys next to
+    # allOf (properties, items, ...) hold refs of their own, so they are
+    # resolved too before taking precedence over the merged members.
+    with {:ok, resolved_schemas, _} <- resolve_all_fully(schemas, context),
+         {:ok, siblings, _} <- resolve_schema(Map.delete(schema, "allOf"), context) do
+      resolved =
+        resolved_schemas
+        |> merge_all_of()
+        |> deep_merge(siblings)
+        |> Map.put(:_composition, {:all_of, resolved_schemas})
 
-        # Original schema metadata (title, description) takes precedence over allOf contents
-        original_metadata = Map.delete(schema, "allOf")
-
-        resolved =
-          merged
-          |> deep_merge(original_metadata)
-          |> Map.put(:_composition, {:all_of, resolved_schemas})
-
-        {:ok, resolved, new_context}
-
-      error ->
-        error
+      {:ok, resolved, context}
     end
   end
 
@@ -193,20 +183,50 @@ defmodule Smelter.Resolver do
   end
 
   defp resolve_file_ref_target(schema, ref, target_schema, _full_path, context) do
-    if generatable_schema?(target_schema) do
-      ref_type = determine_ref_type_from_schema(target_schema)
+    case ref_kind(target_schema) do
+      :inline ->
+        resolve_simple_ref_inline(schema, ref, context)
 
-      annotated =
-        schema
-        |> Map.put(:_ref, ref)
-        |> Map.put(:_ref_module, ref_to_module(ref, context))
-        |> Map.put(:_ref_type, ref_type)
+      kind ->
+        annotated =
+          schema
+          |> Map.put(:_ref, ref)
+          |> annotate_ref(kind, ref, target_schema, context)
 
-      {:ok, annotated, context}
-    else
-      # Target is a simple type - resolve it inline
-      resolve_simple_ref_inline(schema, ref, context)
+        {:ok, annotated, context}
     end
+  end
+
+  # What a $ref target becomes on the referencing side: an embedded module
+  # (:object), a list of the module generated from the array's items (:array),
+  # or a type merged into the property itself (:inline, for scalars and arrays
+  # of scalars or of other modules).
+  defp ref_kind(%{"type" => "array", "items" => items}) when is_map(items) do
+    if generatable_schema?(items), do: :array, else: :inline
+  end
+
+  defp ref_kind(target) do
+    if generatable_schema?(target), do: :object, else: :inline
+  end
+
+  defp annotate_ref(schema, :inline, _ref, _target, _context), do: schema
+
+  defp annotate_ref(schema, :object, ref, target, context) do
+    schema
+    |> Map.put(:_ref_module, ref_to_module(ref, context))
+    |> Map.put(:_ref_type, determine_schema_ref_type(target))
+  end
+
+  defp annotate_ref(schema, :array, ref, target, context) do
+    schema
+    |> annotate_ref(:object, ref, target["items"], context)
+    |> Map.put(:_ref_cardinality, :many)
+  end
+
+  defp local_target("", context), do: context.root_schema
+
+  defp local_target(pointer, context) do
+    get_in(context.root_schema, pointer_to_path(pointer))
   end
 
   defp resolve_simple_ref_inline(schema, ref, context) do
@@ -414,21 +434,10 @@ defmodule Smelter.Resolver do
     end
   end
 
-  # Determine ref type from already-loaded schema
-  defp determine_ref_type_from_schema(schema) when is_map(schema) do
-    if Map.has_key?(schema, "oneOf") or Map.has_key?(schema, "anyOf") do
-      :union
-    else
-      :regular
-    end
-  end
-
-  defp determine_ref_type_from_schema(_), do: :regular
-
   # Determine the type of schema a ref points to (union or regular)
   defp determine_ref_type(file_path, pointer) do
     case load_and_get_target(file_path, pointer) do
-      {:ok, target} -> determine_ref_type_from_schema(target)
+      {:ok, target} -> determine_schema_ref_type(target)
       {:error, _} -> :regular
     end
   end
@@ -539,8 +548,13 @@ defmodule Smelter.Resolver do
     end
   end
 
-  # Check if a schema is generatable (has properties or composition types)
-  # Simple types like {"type": "string"} are not generatable and should be inlined
+  # Check if a schema generates an object module (has properties or composition
+  # types). Scalars and arrays are not generatable and should be inlined, even
+  # when they carry allOf constraints of their own.
+  @non_object_types ~w(array string integer number boolean)
+
+  defp generatable_schema?(%{"type" => type}) when type in @non_object_types, do: false
+
   defp generatable_schema?(schema) when is_map(schema) do
     Map.has_key?(schema, "properties") or
       Map.has_key?(schema, "oneOf") or
