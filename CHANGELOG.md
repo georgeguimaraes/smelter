@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.5](https://github.com/georgeguimaraes/smelter/compare/v0.1.4...v0.1.5) (2026-09-18)
+
+
+### Bug Fixes
+
+* Generate the right field for $refs to array and scalar schemas ([0a96eb2](https://github.com/georgeguimaraes/smelter/commit/0a96eb276c7e6f8bd29f3d3c195d5ae61210b28a))
+
 ## [0.1.4](https://github.com/georgeguimaraes/smelter/compare/v0.1.3...v0.1.4) (2026-09-17)
 
 
