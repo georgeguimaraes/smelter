@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.6](https://github.com/georgeguimaraes/smelter/compare/v0.1.5...v0.1.6) (2026-10-20)
+
+
+### Miscellaneous
+
+* **ci:** Pin georgeguimaraes/workflows to v1.0.1 ([8d56db1](https://github.com/georgeguimaraes/smelter/commit/8d56db1da49de3f67296e625ef2d7cfa0d36cbea))
+* **ci:** Pin GitHub Actions to commit SHAs ([668253b](https://github.com/georgeguimaraes/smelter/commit/668253b60cb996bfaf99926f4f4bc2628d517a19))
+
 ## [0.1.5](https://github.com/georgeguimaraes/smelter/compare/v0.1.4...v0.1.5) (2026-09-18)
 
 
