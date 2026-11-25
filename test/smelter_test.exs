@@ -43,6 +43,35 @@ defmodule SmelterTest do
     end
   end
 
+  describe "field_description/1" do
+    test "returns each property's description and nil for other atoms" do
+      {:ok, schema} = Smelter.parse(Path.join(@fixtures_path, "simple_schema.json"))
+      {_code, module, []} = compile_generated(schema, "Test.Described")
+
+      assert module.field_description(:name) == "The person's name."
+      assert module.field_description(:active) == nil
+      assert module.field_description(:unknown) == nil
+    end
+
+    test "compiles without warnings for a schema with no properties" do
+      schema = %{"title" => "Empty", "type" => "object", "properties" => %{}}
+      {code, module, diagnostics} = compile_generated(schema, "Test.NoProperties")
+
+      refute code =~ "Map.get"
+      assert diagnostics == []
+      assert module.field_description(:anything) == nil
+    end
+  end
+
+  defp compile_generated(schema, module_name) do
+    code = Smelter.generate(schema, module: module_name)
+
+    {[{module, _binary}], diagnostics} =
+      Code.with_diagnostics(fn -> Code.compile_string(code) end)
+
+    {code, module, diagnostics}
+  end
+
   describe "compile/2" do
     test "parses and generates in one step" do
       path = Path.join(@fixtures_path, "simple_schema.json")

@@ -133,7 +133,7 @@ defmodule Smelter.Generator.EctoSchema do
         [quote(do: import(Ecto.Changeset))] ++
         build_alias_statements(embeds) ++
         build_enum_attrs(enums) ++
-        build_field_descriptions_attr(properties) ++
+        build_field_description_fn(properties) ++
         [quote(do: @primary_key(false))] ++
         [build_embedded_schema_ast(fields, embeds, enums)] ++
         build_changeset_fn(fields, embeds, enums, required_atoms) ++
@@ -259,25 +259,21 @@ defmodule Smelter.Generator.EctoSchema do
     end)
   end
 
-  # Build @field_descriptions attribute and accessor function
-  defp build_field_descriptions_attr(properties) do
-    descriptions =
-      properties
-      |> Enum.map(fn {name, prop} ->
-        {String.to_atom(name), prop["description"]}
-      end)
-      |> Enum.into(%{})
-
-    [
-      {:@, [context: Elixir],
-       [{:field_descriptions, [context: Elixir], [Macro.escape(descriptions)]}]},
-      quote(do: @doc("Returns the description for a field, if available.")),
-      quote do
-        def field_description(field) when is_atom(field) do
-          Map.get(@field_descriptions, field)
+  # One field_description/1 clause per property, then a clause that returns nil
+  # for any other atom. A lookup in a literal map would make the compiler warn
+  # that the lookup always returns nil when the schema has no properties.
+  defp build_field_description_fn(properties) do
+    field_clauses =
+      Enum.map(properties, fn {name, prop} ->
+        quote do
+          def field_description(unquote(String.to_atom(name))),
+            do: unquote(prop["description"])
         end
-      end
-    ]
+      end)
+
+    [quote(do: @doc("Returns the description for a field, if available."))] ++
+      field_clauses ++
+      [quote(do: def(field_description(field) when is_atom(field), do: nil))]
   end
 
   # Build embedded_schema block
